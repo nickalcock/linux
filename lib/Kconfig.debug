@@ -389,6 +389,15 @@ config DEBUG_INFO_BTF
 	  support DWARF 5), which will convert DWARF type info into equivalent
 	  deduplicated BTF type info.
 
+config BTFARCHIVE_DEDUP
+        bool "BTF generation using the compiler"
+        default n
+        depends on HAVE_BTF_TOOLCHAIN && DEBUG_INFO_BTF
+        help
+          Emit a compact, compressed description of the kernel's datatypes and
+          global variables into the vmlinux.btfa archive (for in-tree modules)
+          or into .BTF sections in kernel modules (for out-of-tree modules).
+
 config PAHOLE_HAS_SPLIT_BTF
 	def_bool PAHOLE_VERSION >= 119
 

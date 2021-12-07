@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# ===========================================================================
+# BTF archive rules
+# ===========================================================================
+
+# XXX need to force BTF generation in out-of-tree builds: how? A question for
+# Arnaldo, since evidently that BTF also needs regeneration.  It's possible
+# that pahole simply doesn't do anything with such things.
+
+# BTF is already present in every object file if CONFIG_BTFARCHIVE_DEDUP is
+# enabled, vmlinux.lds.h strips it out of the finished kernel, but if nothing
+# is done it will be deduplicated into module .ko's.  For out-of-tree module
+#  builds, this is what we want, but for in-tree modules we can save substantial
+# space by deduplicating it against all the core kernel types as well.  So
+# split the BTF out of in-tree module .o's into separate .BTF files, before
+# linking with the .mod.o, and  the specialized btfarchive tool consume
+# it and all the BTF in the source files that make up vmlinux.o before pahole
+# runs: this uses the same machinery that the linker uses to do BTF
+# deduplication to emit vmlinux.btfa containing the deduplicated BTF.  pahole
+# then consumes this and uses it to emit BTF suitable for the final kernel.
+
+KBUILD_CFLAGS	+= $(call cc-option,-gbtf)
+KBUILD_LDFLAGS	+= $(call ld-option, --ctf-variables)
+
+ifdef CONFIG_BTFARCHIVE_DEDUP
+ifeq ($(KBUILD_EXTMOD),)
+
+# BTF archive generation for in-tree code (modules, built-in and not, and core
+# kernel).  Consumed by pahole.
+
+# This contains all the object files that are built directly into the
+# kernel (including built-in modules), for consumption by btfarchive
+# Make sure that all lines that are not absolute paths start with a ./
+# (for consistency with .tmp_btf.filelist).  We sort it after the
+# fact to eliminate duplicates (there are quite a lot).
+.tmp_objects.builtin: vmlinux.a $(KBUILD_VMLINUX_LIBS)
+	$(Q)for archive in $^; do \
+		$(AR) t "$$archive" >> $@.unsorted; \
+	done; \
+	sed -i '/^[^/]/s,^\([^\.]\),./\1,' $@.unsorted; \
+	sort -u < $@.unsorted > $@; \
+	rm -f $@.unsorted
+
+# This contains a mapping from module name to object file name for all
+# objects named in .tmp_objects.builtin.
+# Extract possible module names from the command-lines used to
+# compile the modules, filter them by the set of actual built-in modules
+# in modules.builtin.
+.tmp_module.objnames: .tmp_objects.builtin modules.builtin
+	$(Q)$(srctree)/scripts/btf-module-objnames.sh $@
+
+# Generate a list of all BTF sources for deduplcation: all objects in the kernel,
+# and all modules.  This is all done only after all the .o's are built
+# and modpost is ready to run.
+
+btf-modules = $(shell find . -name '*.o.BTF' -print)
+
+.tmp_btf.filelist.raw: .tmp_objects.builtin modules.order
+	@rm -f $@
+	$(call xargs,@printf "%s\n" >> $@, $< $(btf-modules))
+	@touch $@
+
+.tmp_btf.filelist.expanded: .tmp_btf.filelist.raw
+	@rm -f $@
+	@cat $^ | while read -r obj; do \
+		case $$obj in \
+		*.builtin) cat $$obj >> $@;; \
+		*) echo "$$obj" >> $@;; \
+		esac; \
+	done
+	@touch $@
+
+.tmp_btf.filelist: .tmp_btf.filelist.expanded
+	@if [[ ! -e $@ ]] || \
+	    ! cmp $@ $< > /dev/null; then \
+		cp -f $< $@; \
+	fi
+
+quiet_cmd_btfa_raw = BTFARAW
+      cmd_btfa_raw = $(objtree)/scripts/btf/btfarchive $@ .tmp_objects.builtin .tmp_module.objnames .tmp_btf.filelist
+
+# The raw BTF depends on the output BTF file list, and that depends
+# on the .o.BTF files for the modules.  It also depends on the
+# object name list, since that is used to merge built-in modules into
+# the parent dict.
+.tmp_vmlinux.btfa.raw: .tmp_btf.filelist .tmp_module.objnames FORCE
+	$(call if_changed,btfa_raw)
+
+targets += .tmp_vmlinux.btfa.raw
+
+# The BTFA's single section is .ctf, not .BTF, because it contains
+# a CTF archive, which is not valid BTF.  Nonetheless, the types it
+# contains are BTF types (modulo only some CTF_K_CONFLICTED prefixes).
+quiet_cmd_btfa = BTFA
+      cmd_btfa = { echo 'int main () { return 0; } ' | \
+		$(CC) -x c -c -o $<.stub -; \
+	$(OBJCOPY) '--remove-section=.*' --add-section=.ctf=$< \
+		 $<.stub $@; }
+
+# The BTFA itself is an ELF executable with one section: the BTF.  This lets
+# objdump work on it, at minimal size cost.
+vmlinux.btfa: .tmp_vmlinux.btfa.raw FORCE
+	$(call if_changed,btfa)
+
+targets += vmlinux.btfa
+
+# Making BTF needs the BTFA file (which needs all the .o files, etc).
+vmlinux: vmlinux.btfa
+
+CLEAN_FILES += vmlinux.btfa
+
+endif		# KBUILD_EXTMOD
+endif		# !CONFIG_BTFARCHIVE_DEDUP

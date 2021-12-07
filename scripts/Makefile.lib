@@ -311,9 +311,36 @@ ifdef CONFIG_LTO_CLANG
 cmd_ld_single = $(if $(objtool-enabled)$(is-single-obj-m), ; $(LD) $(ld_flags) -r -o $(tmp-target) $@; mv $(tmp-target) $@)
 endif
 
+# Arrange to strip compiler-generated BTF out of modules after linking, for
+# later consumption by btfarchive.  Single-file modules are handled here;
+# multi-file modules in Makefile.build.  (As a consequence, we pass multi-
+# file objects through deduplication repeatedly, once in ld -r, once in
+# btfarchive, but single-file objects, like the core kernel, only pass
+# through btfarchive.)
+
+ifdef CONFIG_BTFARCHIVE_DEDUP
+define btfarchive_extract_btf =
+	ln $(1) $(1).tmp && \
+	$(OBJCOPY) --only-section=.BTF --only-section=.ctf $(1).tmp $(1).BTF && \
+	$(OBJCOPY) --remove-section=.BTF --remove-section=.ctf $(1).tmp $(1) && rm -f $(1).tmp
+endef
+
+define btfarchive_delete_btf =
+	ln $(1) $(1).tmp && \
+	$(OBJCOPY) --remove-section=.BTF --remove-section=.ctf $(1).tmp $(1) && rm -f $(1).tmp
+endef
+
+cmd_ld_btf_strip = $(if $(is-single-obj-m), && $(call btfarchive_extract_btf,$@))
+else		# !CONFIG_BTFARCHIVE_DEDUP
+btfarchive_extract_btf := :
+btfarchive_delete_btf := :
+cmd_ld_btf_strip := :
+endif
+
 quiet_cmd_cc_o_c = CC $(quiet_modtag)  $@
       cmd_cc_o_c = $(CC) $(c_flags) -c -o $@ $< \
 		$(cmd_ld_single) \
+		$(cmd_ld_btf_strip) \
 		$(cmd_objtool)
 
 define rule_cc_o_c

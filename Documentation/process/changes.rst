@@ -64,9 +64,12 @@ gtags (optional)       6.6.5            gtags --version
 mkimage (optional)     2017.01          mkimage --version
 Python (optional)      3.5.x            python3 --version
 GNU AWK (optional)     5.1.0            gawk --version
+GNU C\ [#f2]_          15.0             gcc --version
+binutils\ [#f2]_       2.45             ld -v
 ====================== ===============  ========================================
 
 .. [#f1] Sphinx is needed only to build the Kernel documentation
+.. [#f2] These are needed at build-time when CONFIG_BTFARCHIVE_DEDUP is enabled
 
 Kernel compilation
 ******************

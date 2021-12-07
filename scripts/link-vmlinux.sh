@@ -101,6 +101,10 @@ vmlinux_link()
 		ldflags="${ldflags} ${wl}-Map=${output}.map"
 	fi
 
+	if is_enabled CONFIG_BTFARCHIVE_DEDUP; then
+		ldflags="${ldflags} ${wl}--disable-ctf-dedup"
+	fi
+
 	${ld} ${ldflags} -o ${output}					\
 		${wl}--whole-archive ${objs} ${wl}--no-whole-archive	\
 		${wl}--start-group ${libs} ${wl}--end-group		\
@@ -201,6 +205,8 @@ if [ "$1" = "clean" ]; then
 fi
 
 ${MAKE} -f "${srctree}/scripts/Makefile.build" obj=init init/version-timestamp.o
+objcopy --remove-section=.BTF init/version-timestamp.o init/version-timestamp.o.tmp && \
+    mv init/version-timestamp.o.tmp init/version-timestamp.o
 
 arch_vmlinux_o=
 if is_enabled CONFIG_ARCH_WANTS_PRE_LINK_VMLINUX; then
