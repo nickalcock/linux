@@ -16,6 +16,8 @@
 *.bin
 *.bz2
 *.c.[012]*.*
+*.btf
+*.ctf
 *.dt.yaml
 *.dtb
 *.dtbo
@@ -67,6 +69,7 @@ modules.order
 /vmlinux.map
 /vmlinux.symvers
 /vmlinux.unstripped
+/vmlinux.btfa
 /vmlinux-gdb.py
 /vmlinuz
 /System.map

@@ -45,6 +45,10 @@ SECTIONS
 	. = ALIGN(0x100);
 
 	.text		: { *(.text*) }			:text	=0x90909090
+
+	/DISCARD/ : {
+		*(.BTF .ctf)
+	}
 }
 
 /*

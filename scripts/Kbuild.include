@@ -61,6 +61,13 @@ escsq = $(subst $(squote),'\$(squote)',$1)
 stringify = $(squote)$(quote)$1$(quote)$(squote)
 
 ###
+# Split a list up like shell xargs does.
+define xargs =
+$(1) $(wordlist 1,1024,$(2))
+$(if $(word 1025,$(2)),$(call xargs,$(1),$(wordlist 1025,$(words $(2)),$(2))))
+endef
+
+###
 # The path to Kbuild or Makefile. Kbuild has precedence over Makefile.
 kbuild-file = $(or $(wildcard $(src)/Kbuild),$(src)/Makefile)
 

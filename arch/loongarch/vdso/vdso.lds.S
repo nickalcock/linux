@@ -47,6 +47,7 @@ SECTIONS
 		*(.note.GNU-stack)
 		*(.data .data.* .gnu.linkonce.d.* .sdata*)
 		*(.bss .sbss .dynbss .dynsbss)
+		*(.BTF .ctf)
 	}
 }
 
