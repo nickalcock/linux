@@ -80,6 +80,7 @@ SECTIONS
 		*(.discard)
 		*(.discard.*)
 		*(__bug_table)
+		*(.BTF .ctf)
 	}
 }
 

@@ -24,9 +24,11 @@ ccflags-remove-y := $(CC_FLAGS_CFI)
 
 %.mod.o: %.mod.c FORCE
 	$(call if_changed_rule,cc_o_c)
+	$(Q)$(call ld_delete_btf,$@)
 
 .module-common.o: $(srctree)/scripts/module-common.c FORCE
 	$(call if_changed_rule,cc_o_c)
+	$(Q)$(call ld_delete_btf,$@)
 
 ifneq ($(WARN_ON_UNUSED_TRACEPOINTS),)
 cmd_check_tracepoint = $(objtree)/scripts/tracepoint-update --module $<;

@@ -309,6 +309,11 @@ quiet_cmd_ar = AR      $@
 quiet_cmd_objcopy = OBJCOPY $@
 cmd_objcopy = $(OBJCOPY) $(OBJCOPYFLAGS) $(OBJCOPYFLAGS_$(@F)) $< $@
 
+define ld_delete_btf =
+	ln $(1) $(1).tmp && \
+	$(OBJCOPY) --remove-section=.BTF --remove-section=.ctf $(1).tmp $(1) && rm -f $(1).tmp
+endef
+
 # Gzip
 # ---------------------------------------------------------------------------
 
