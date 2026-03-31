@@ -175,9 +175,10 @@ config PAHOLE_VERSION
 
 config HAVE_BTF_TOOLCHAIN
 	def_bool $(cc-option,-gbtf) && ($(success,$(LD) --help 2>&1 | grep -q ctf))
-	depends on CC_IS_GCC
+	depends on CC_IS_GCC && DEBUG_INFO_BTF
 	help
-	  GCC and binutils support BTF generation.
+	  GCC and binutils support BTF generation.  Linking is done with pahole
+	  using libctf.
 
 config CONSTRUCTORS
 	bool

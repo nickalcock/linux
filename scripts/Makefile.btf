@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
 
-KBUILD_CFLAGS	+= $(call cc-option,-gbtf)
-
 pahole-ver := $(CONFIG_PAHOLE_VERSION)
 pahole-flags-y :=
 
@@ -33,9 +31,13 @@ endif
 
 endif
 
-pahole-flags-y += -F libctf
-
 pahole-flags-$(CONFIG_PAHOLE_HAS_LANG_EXCLUDE)		+= --lang_exclude=rust
 
 export PAHOLE_FLAGS := $(pahole-flags-y)
 export MODULE_PAHOLE_FLAGS := $(module-pahole-flags-y)
+
+ifneq ($(CONFIG_HAVE_BTF_TOOLCHAIN),)
+KBUILD_CFLAGS	+= $(call cc-option,-gbtf)
+# No need for --btf_features or --lang_exclude, we are not encoding BTF.
+export PAHOLE_LIBCTF_FLAGS := -F libctf -j$(JOBS)
+endif
