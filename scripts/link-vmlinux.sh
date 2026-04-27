@@ -49,6 +49,7 @@ info()
 vmlinux_link()
 {
 	local output=${1}
+	local no_vmlinux_btf=${2:-}
 	local objs
 	local libs
 	local ld
@@ -89,7 +90,14 @@ vmlinux_link()
 		ldlibs=
 	fi
 
-	ldflags="${ldflags} ${wl}--script=${objtree}/${KBUILD_LDS}"
+	# If we have BTF in a separate file, get it from there, and only there.
+	if [[ -n $btf_vmlinux_bin_o ]]; then
+		sed 's,KEEP(\*(\.BTF)),KEEP('"${btf_vmlinux_bin_o}"'(.BTF)),g;' \
+		< ${objtree}/${KBUILD_LDS} > ${objtree}/${KBUILD_LDS}.separate-btf
+		ldflags="${ldflags} ${wl}--script=${objtree}/${KBUILD_LDS}.separate-btf"
+	else
+		ldflags="${ldflags} ${wl}--script=${objtree}/${KBUILD_LDS}"
+	fi
 
 	# The kallsyms linking does not need debug symbols included.
 	if [ -n "${strip_debug}" ] ; then
@@ -104,69 +112,8 @@ vmlinux_link()
 		${wl}--whole-archive ${objs} ${wl}--no-whole-archive	\
 		${wl}--start-group ${libs} ${wl}--end-group		\
 		${kallsymso} ${btf_vmlinux_bin_o} ${arch_vmlinux_o} ${ldlibs}
-}
 
-# TODO: Not sure this is needed ...
-# Deduplicating link of vmlinux using libctf
-# ${1} - output file
-vmlinux_link_libctf()
-{
-	local output=${1}
-	local objs
-	local libs
-	local ld
-	local ldflags
-	local ldlibs
-
-	info LD ${output}
-
-	# skip output file argument
-	shift
-
-	if is_enabled CONFIG_LTO_CLANG || is_enabled CONFIG_X86_KERNEL_IBT ||
-	   is_enabled CONFIG_KLP_BUILD; then
-		# Use vmlinux.o instead of performing the slow LTO link again.
-		objs=vmlinux.o
-		libs=
-	else
-		objs=vmlinux.a
-		libs="${KBUILD_VMLINUX_LIBS}"
-	fi
-
-	if is_enabled CONFIG_GENERIC_BUILTIN_DTB; then
-		objs="${objs} .builtin-dtbs.o"
-	fi
-
-	objs="${objs} .vmlinux.export.o"
-	objs="${objs} init/version-timestamp.o"
-
-	if [ "${SRCARCH}" = "um" ]; then
-		wl=-Wl,
-		ld="${CC}"
-		ldflags="${CFLAGS_vmlinux}"
-		ldlibs="-lutil -lrt -lpthread"
-	else
-		wl=
-		ld="${LD}"
-		ldflags="${KBUILD_LDFLAGS} ${LDFLAGS_vmlinux}"
-		ldlibs=
-	fi
-
-	ldflags="${ldflags} ${wl}--script=${objtree}/${KBUILD_LDS}"
-
-	# The kallsyms linking does not need debug symbols included.
-	if [ -n "${strip_debug}" ] ; then
-		ldflags="${ldflags} ${wl}--strip-debug"
-	fi
-
-	if [ -n "${generate_map}" ];  then
-		ldflags="${ldflags} ${wl}-Map=vmlinux.map"
-	fi
-
-	${ld} ${ldflags} -o ${output}					\
-		${wl}--whole-archive ${objs} ${wl}--no-whole-archive	\
-		${wl}--start-group ${libs} ${wl}--end-group		\
-		${kallsymso} ${btf_vmlinux_bin_o} ${arch_vmlinux_o} ${ldlibs}
+	rm -f "${objtree}/${KBUILD_LDS}.separate-btf"
 }
 
 # generate .BTF typeinfo from DWARF debuginfo
@@ -197,7 +144,7 @@ gen_btf()
 	btf_vmlinux_bin_o=${btf_data}
 }
 
-# read compiler-generated .BTF typeinfo
+# read compiler-generated .BTF typeinfo, and strip it out of the passed-in image.
 # ${1} - vmlinux image
 read_btf()
 {
@@ -223,7 +170,7 @@ read_btf()
 	fi
 	printf "${et_rel}" | dd of="${btf_data}" conv=notrunc bs=1 seek=16 status=none
 
-	# btf_vmlinux_bin_o=${btf_data}
+	btf_vmlinux_bin_o=${btf_data}
 }
 
 # Create ${2}.o file with all symbols from the ${1} object file
@@ -316,7 +263,7 @@ if is_enabled CONFIG_KALLSYMS; then
 fi
 
 if is_enabled CONFIG_HAVE_BTF_TOOLCHAIN; then
-	vmlinux_link_libctf .tmp_vmlinux1
+	vmlinux_link .tmp_vmlinux1
 
 	if ! read_btf .tmp_vmlinux1; then
 		echo >&2 "Failed to read BTF for vmlinux"
