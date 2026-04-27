@@ -316,15 +316,13 @@ if is_enabled CONFIG_KALLSYMS; then
 fi
 
 if is_enabled CONFIG_HAVE_BTF_TOOLCHAIN; then
+	vmlinux_link_libctf .tmp_vmlinux1
+
 	if ! read_btf .tmp_vmlinux1; then
 		echo >&2 "Failed to read BTF for vmlinux"
 		echo >&2 "Check pahole version"
 		exit 1
 	fi
-fi
-
-if is_enabled CONFIG_KALLSYMS && is_enabled CONFIG_HAVE_BTF_TOOLCHAIN; then
-	vmlinux_link_libctf .tmp_vmlinux1
 else
 	if is_enabled CONFIG_KALLSYMS || is_enabled CONFIG_DEBUG_INFO_BTF; then
 	
